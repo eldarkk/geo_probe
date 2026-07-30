@@ -1,0 +1,177 @@
+{
+  "@@locale": "en",
+  "appTitle": "geo_probe",
+  "tabMap": "Map",
+  "tabJournal": "Journal",
+  "tabSettings": "Settings",
+  "tabDiagnostics": "Diagnostics",
+
+  "regionLimitWarning": "iOS limit: max 20 monitored zones. Deactivate one first.",
+  "newRegionTitle": "New zone",
+  "regionNameLabel": "Name",
+  "radiusLabel": "Radius: {meters} m",
+  "@radiusLabel": {
+    "placeholders": {
+      "meters": {"type": "int"}
+    }
+  },
+  "radiusValue": "{meters} m",
+  "@radiusValue": {
+    "placeholders": {
+      "meters": {"type": "int"}
+    }
+  },
+  "radiusHint": "Apple/Google recommend ≥100–150 m. Below that, events are unreliable.",
+  "regionDefaultName": "Zone {number}",
+  "@regionDefaultName": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "zonesTitle": "Zones",
+  "noZonesYet": "No zones yet — long-press the map to create one",
+  "cancel": "Cancel",
+  "create": "Create",
+  "close": "Close",
+  "delete": "Delete",
+  "activate": "Activate",
+  "deactivate": "Deactivate",
+
+  "eventTypeEnter": "Zone enter",
+  "eventTypeExit": "Zone exit",
+  "eventTypeSlc": "Significant movement (SLC)",
+  "eventTypeStateInitial": "Initial zone state",
+  "eventTypeRelaunch": "Relaunch by location event",
+  "eventTypeHeartbeat": "Diagnostics snapshot",
+  "eventTypePermissionChange": "Location permission change",
+  "eventTypeError": "Location error",
+
+  "valYes": "Yes",
+  "valNo": "No",
+  "permAlways": "Always",
+  "permWhenInUse": "When in use",
+  "permDenied": "Denied",
+  "permNotDetermined": "Not requested",
+  "permRestricted": "Restricted",
+  "accFull": "Precise",
+  "accReduced": "Approximate",
+  "barAvailable": "Enabled",
+  "barDenied": "Disabled",
+  "barRestricted": "Restricted",
+  "appStateForeground": "app active",
+  "appStateBackground": "in background",
+  "appStateLaunching": "during launch",
+  "appStateTerminatedRelaunch": "relaunched from terminated",
+
+  "sectionTelegram": "Telegram logger",
+  "tgEnabledTitle": "Send events to Telegram",
+  "tgTokenLabel": "Bot token",
+  "tgChatIdLabel": "Chat ID",
+  "tgHint": "Create a bot via @BotFather and paste the token. Send /start to the bot, then find your chat ID (e.g. via @userinfobot). Live events are sent while iOS lets the app run; events accumulated in background are sent as one message on the next open.",
+  "tgSaved": "Telegram settings saved",
+  "save": "Save",
+
+  "exportTooltip": "Export all history as JSON",
+  "presenceTitle": "Presence",
+  "dwellLine": "{region}: on site {duration}, {exits, plural, one {# exit} other {# exits}}",
+  "@dwellLine": {
+    "placeholders": {
+      "region": {"type": "String"},
+      "duration": {"type": "String"},
+      "exits": {"type": "int"}
+    }
+  },
+  "insideNow": " · inside now",
+  "noEventsForDay": "No events for this day",
+  "delayMinSec": "delay {minutes}m {seconds}s",
+  "@delayMinSec": {
+    "placeholders": {
+      "minutes": {"type": "int"},
+      "seconds": {"type": "int"}
+    }
+  },
+  "delaySec": "delay {seconds}s",
+  "@delaySec": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "durationHM": "{hours}h {minutes}m",
+  "@durationHM": {
+    "placeholders": {
+      "hours": {"type": "int"},
+      "minutes": {"type": "String"}
+    }
+  },
+  "durationMS": "{minutes}m {seconds}s",
+  "@durationMS": {
+    "placeholders": {
+      "minutes": {"type": "int"},
+      "seconds": {"type": "String"}
+    }
+  },
+  "durationS": "{seconds}s",
+  "@durationS": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+
+  "sectionGeofencing": "Geofence zones",
+  "regionMonitoringTitle": "Track enter and exit",
+  "regionMonitoringSubtitle": "Log an event when you enter or leave a zone",
+  "notifyOnEntryTitle": "React to entering",
+  "notifyOnExitTitle": "React to leaving",
+  "sectionSlc": "Movement tracking (SLC)",
+  "slcTitle": "Track significant movement",
+  "slcSubtitle": "Coarse accuracy (~500 m–1 km). Keeps working even after the app is closed.",
+  "sectionDiagnostics": "Diagnostics",
+  "localNotificationsTitle": "Event notifications",
+  "localNotificationsSubtitle": "Show a banner on every enter, exit and movement",
+  "sectionActions": "Actions",
+  "requestPermissionsTitle": "Request permissions",
+  "requestPermissionsSubtitle": "Notifications and location (\"Always\")",
+  "permissionResult": "Location permission: {status}",
+  "@permissionResult": {
+    "placeholders": {
+      "status": {"type": "String"}
+    }
+  },
+  "resyncTitle": "Refresh zones in the system",
+  "resyncDone": "Zones refreshed",
+  "clearHistoryTitle": "Clear event history",
+  "clearDialogTitle": "Clear history?",
+  "clearDialogBody": "All logged events will be deleted. Zones are kept.",
+  "clear": "Clear",
+
+  "refreshTooltip": "Refresh",
+  "lastHeartbeat": "Last check: {time}",
+  "@lastHeartbeat": {
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "countersHeader": "Total events",
+  "noDiagnosticsYet": "No data yet — tap refresh",
+  "noEventsYet": "No events recorded yet",
+  "regionStats": "Active zones: {active} / 20 (iOS limit)\nZones total: {total}",
+  "@regionStats": {
+    "placeholders": {
+      "active": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+
+  "diagAuthorizationStatus": "Location permission",
+  "diagAccuracyAuthorization": "Location accuracy",
+  "diagLocationServicesEnabled": "Location services",
+  "diagBackgroundRefreshStatus": "Background App Refresh",
+  "diagNotificationsAuthorized": "Notifications allowed",
+  "diagMonitoredRegionsCount": "Zones monitored by iOS",
+  "diagSlcEnabled": "Movement tracking (SLC)",
+  "diagRegionMonitoringEnabled": "Enter/exit tracking",
+  "diagLaunchedByLocation": "Launched by a location event",
+  "diagAppVersion": "App version",
+  "diagOsVersion": "iOS version",
+  "diagBatteryPercent": "Battery, %"
+}
