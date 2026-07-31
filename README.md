@@ -353,7 +353,12 @@ would fix: log every case of a geofence event arriving late/never keyed by
 
 ---
 
-## 5. Running & testing
+## 5. Distributing builds to testers
+
+See [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) — TestFlight internal
+testing (recommended, no beta review) vs Ad Hoc IPA, step by step.
+
+## 6. Running & testing
 
 ```bash
 flutter run                     # device or simulator
