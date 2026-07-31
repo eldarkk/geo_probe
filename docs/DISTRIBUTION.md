@@ -5,8 +5,8 @@ field-test protocol for weeks (set up once, auto-updates); pick Ad Hoc for a
 one-off "show it today" install.
 
 Prerequisites (both paths): paid Apple Developer Program membership — this
-project signs with team `HMG65UJ7YG`, automatic signing is already configured
-in the Xcode project. Bundle id: `com.clockster.geoProbe`.
+project signs with team `SJ8ZA5APB3` (Clockster PTE LTD), automatic signing
+is already configured in the Xcode project. Bundle id: `com.clockster.geoProbe`.
 
 ---
 
