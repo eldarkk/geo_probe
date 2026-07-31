@@ -1,5 +1,5 @@
 name: geo_probe
-description: "A new Flutter project."
+description: "Diagnostic app measuring geofence event delivery (latency, survivability) for the geolocation attendance architecture."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

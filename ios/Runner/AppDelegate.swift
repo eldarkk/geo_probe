@@ -39,7 +39,10 @@ final class LocationService: NSObject {
   private let defaults = UserDefaults.standard
 
   private var eventSink: FlutterEventSink?
-  private var pendingLocationResult: FlutterResult?
+  // Every getCurrentLocation caller waiting for a fix. An array, not a single
+  // slot: overlapping calls (initState + FAB) must all get their answer, or
+  // the overwritten Dart Future would hang forever.
+  private var pendingLocationResults: [FlutterResult] = []
   private var launchedByLocation = false
   // Tracked manually so callbacks never need UIApplication on a background thread.
   private var appState = "launching"
@@ -260,8 +263,12 @@ final class LocationService: NSObject {
       result(Self.fixMap(last))
       return
     }
-    pendingLocationResult = result
-    manager.requestLocation()
+    pendingLocationResults.append(result)
+    // One in-flight request serves every waiter; calling requestLocation()
+    // again would cancel the previous request.
+    if pendingLocationResults.count == 1 {
+      manager.requestLocation()
+    }
   }
 
   private static func fixMap(_ location: CLLocation) -> [String: Any] {
@@ -432,14 +439,23 @@ extension LocationService: CLLocationManagerDelegate {
   func locationManager(_ manager: CLLocationManager,
                        didUpdateLocations locations: [CLLocation]) {
     guard let latest = locations.last else { return }
-    if let pending = pendingLocationResult {
-      pendingLocationResult = nil
-      DispatchQueue.main.async { pending(Self.fixMap(latest)) }
+    if !pendingLocationResults.isEmpty {
+      let pending = pendingLocationResults
+      pendingLocationResults = []
+      let fix = Self.fixMap(latest)
+      DispatchQueue.main.async { pending.forEach { $0(fix) } }
       return
     }
-    // No continuous foreground updates in this app: any unsolicited
-    // didUpdateLocations delivery comes from SLC.
-    writeEvent(type: "slc", location: latest)
+    // No continuous foreground updates in this app: an unsolicited delivery
+    // comes from SLC — but only if SLC monitoring is actually on. A late
+    // one-shot fix arriving after didFailWithError already cleared the
+    // waiters must not be logged as movement.
+    if configBool("slcEnabled", default: false) {
+      writeEvent(type: "slc", location: latest)
+    } else {
+      writeEvent(type: "error", location: latest,
+                 detail: "unsolicited didUpdateLocations while SLC is off")
+    }
   }
 
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -460,9 +476,10 @@ extension LocationService: CLLocationManagerDelegate {
   }
 
   func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-    if let pending = pendingLocationResult {
-      pendingLocationResult = nil
-      DispatchQueue.main.async { pending(nil) }
+    if !pendingLocationResults.isEmpty {
+      let pending = pendingLocationResults
+      pendingLocationResults = []
+      DispatchQueue.main.async { pending.forEach { $0(nil) } }
     }
     writeEvent(type: "error", detail: "didFail: \(error.localizedDescription)")
   }

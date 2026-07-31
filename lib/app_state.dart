@@ -69,10 +69,10 @@ class AppState extends ChangeNotifier {
   Future<void> _onLiveEvent(Map<String, dynamic> raw) async {
     try {
       final event = GeoEvent.fromMap(raw);
-      await db.insertEvents([event]);
+      final fresh = await db.insertEvents([event]);
       eventsRevision++;
       notifyListeners();
-      if (_tgWorthy(event)) {
+      if (fresh.isNotEmpty && _tgWorthy(event)) {
         unawaited(_tgSend(_tgFormat(event)));
       }
     } catch (e) {
@@ -84,12 +84,15 @@ class AppState extends ChangeNotifier {
   Future<void> drainNativeEvents() async {
     final events = await bridge.drainNativeEvents();
     if (events.isNotEmpty) {
-      await db.insertEvents(events);
+      // The drain returns everything from the JSONL file, including events
+      // already ingested via the live stream (and already sent to Telegram).
+      // insertEvents filters those out — only genuinely new ones go further.
+      final fresh = await db.insertEvents(events);
       eventsRevision++;
       notifyListeners();
       // Accumulated background events go out as ONE combined message to
       // avoid Telegram rate limits.
-      final worthy = events.where(_tgWorthy).toList();
+      final worthy = fresh.where(_tgWorthy).toList();
       if (worthy.isNotEmpty) {
         var text = worthy.map(_tgFormat).join('\n\n');
         if (text.length > 3800) text = '${text.substring(0, 3800)}\n…';

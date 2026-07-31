@@ -75,15 +75,35 @@ class ProbeDb {
 
   /// Inserts events, ignoring duplicates by uuid (idempotent — duplicate
   /// EXITs and the iOS post-reboot double-fire are documented behaviours).
-  Future<void> insertEvents(Iterable<GeoEvent> events) async {
-    if (events.isEmpty) return;
+  /// Returns only the events that were NOT already stored, so callers can
+  /// react (Telegram, counters) to genuinely new events: everything drained
+  /// from the native JSONL was possibly already ingested via the live stream.
+  Future<List<GeoEvent>> insertEvents(Iterable<GeoEvent> events) async {
+    final incoming = events.toList();
+    if (incoming.isEmpty) return const [];
     final db = await database;
+    final known = <String>{};
+    for (var i = 0; i < incoming.length; i += 500) {
+      final chunk = incoming.sublist(
+          i, i + 500 > incoming.length ? incoming.length : i + 500);
+      final rows = await db.query('events',
+          columns: ['uuid'],
+          where: 'uuid IN (${List.filled(chunk.length, '?').join(',')})',
+          whereArgs: chunk.map((e) => e.uuid).toList());
+      known.addAll(rows.map((r) => r['uuid'] as String));
+    }
+    final fresh = <GeoEvent>[];
+    for (final e in incoming) {
+      if (known.add(e.uuid)) fresh.add(e);
+    }
+    if (fresh.isEmpty) return const [];
     final batch = db.batch();
-    for (final e in events) {
+    for (final e in fresh) {
       batch.insert('events', e.toMap(),
           conflictAlgorithm: ConflictAlgorithm.ignore);
     }
     await batch.commit(noResult: true);
+    return fresh;
   }
 
   Future<List<GeoEvent>> eventsForDay(DateTime day, {Set<String>? types}) async {

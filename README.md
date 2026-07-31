@@ -96,9 +96,12 @@ termination when Always authorization is granted.
 
 - Toggled from settings; `start/stopMonitoringSignificantLocationChanges`.
 - Cell-tower granularity (~500 m–1 km), delivers via `didUpdateLocations`.
-  Since the app never runs continuous foreground updates, any unsolicited
-  `didUpdateLocations` delivery is classified as `slc` (a pending one-shot
-  `getCurrentLocation` request is consumed first and not logged).
+  Since the app never runs continuous foreground updates, an unsolicited
+  `didUpdateLocations` delivery is classified as `slc` — but only while SLC
+  monitoring is enabled; otherwise it is logged as `error` (a late one-shot
+  fix arriving after a `didFailWithError` must not masquerade as movement).
+  Pending one-shot `getCurrentLocation` requests are consumed first and not
+  logged.
 - Also relaunches a terminated app when Always is granted — the backup
   channel to region monitoring.
 
@@ -188,7 +191,9 @@ sheet. `sharePositionOrigin` is anchored to the export button's own
 Settings → bot token (@BotFather) + chat ID. Live `enter/exit/slc/relaunch/
 permission_change/error` events are POSTed to the Bot API as they happen;
 events accumulated while backgrounded are sent as **one** combined message on
-the next open (rate limits). Heartbeats and `state_initial` are not sent.
+the next open (rate limits). The JSONL drain re-delivers events already seen
+live — only events new to the SQLite journal are forwarded, so nothing is
+sent twice. Heartbeats and `state_initial` are not sent.
 The local journal remains the source of truth — Telegram is a mirror that
 only works while iOS lets the app run.
 
