@@ -530,6 +530,54 @@ abstract class AppLocalizations {
   /// **'Show a banner on every enter, exit and movement'**
   String get localNotificationsSubtitle;
 
+  /// No description provided for @sectionHeartbeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Background heartbeat'**
+  String get sectionHeartbeat;
+
+  /// No description provided for @heartbeatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Periodic status report'**
+  String get heartbeatTitle;
+
+  /// No description provided for @heartbeatSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Background task: permission status, location and battery — as a notification and to Telegram. iOS chooses the actual timing.'**
+  String get heartbeatSubtitle;
+
+  /// No description provided for @heartbeatIntervalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum interval'**
+  String get heartbeatIntervalTitle;
+
+  /// No description provided for @heartbeatIntervalValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String heartbeatIntervalValue(int minutes);
+
+  /// No description provided for @heartbeatNowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send heartbeat now'**
+  String get heartbeatNowTitle;
+
+  /// No description provided for @heartbeatNowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Test the notification and Telegram delivery'**
+  String get heartbeatNowSubtitle;
+
+  /// No description provided for @heartbeatSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Heartbeat sent'**
+  String get heartbeatSent;
+
   /// No description provided for @sectionActions.
   ///
   /// In en, this message translates to:
@@ -697,6 +745,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Battery, %'**
   String get diagBatteryPercent;
+
+  /// No description provided for @diagHeartbeatEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Background heartbeat'**
+  String get diagHeartbeatEnabled;
+
+  /// No description provided for @diagHeartbeatInterval.
+  ///
+  /// In en, this message translates to:
+  /// **'Heartbeat interval'**
+  String get diagHeartbeatInterval;
+
+  /// No description provided for @diagLastNativeHeartbeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Last background heartbeat'**
+  String get diagLastNativeHeartbeat;
 }
 
 class _AppLocalizationsDelegate

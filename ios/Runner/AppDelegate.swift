@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import CoreLocation
 import UserNotifications
+import BackgroundTasks
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -49,6 +50,12 @@ final class LocationService: NSObject {
 
   private static let configKey = "geo_probe.config"
   private static let regionsKey = "geo_probe.regions"
+  // Telegram credentials mirrored from Dart so the background heartbeat can
+  // post without the Flutter engine.
+  private static let telegramKey = "geo_probe.telegram"
+  private static let lastHeartbeatTsKey = "geo_probe.lastHeartbeatTs"
+  // Must match BGTaskSchedulerPermittedIdentifiers in Info.plist.
+  private static let heartbeatTaskId = "com.clockster.geoProbe.heartbeat"
 
   // MARK: Config
 
@@ -66,6 +73,15 @@ final class LocationService: NSObject {
     config[key] as? Bool ?? def
   }
 
+  // Defaults must match AppConfig in lib/models.dart (enabled, 60 min): a
+  // terminated-state relaunch may run before Dart re-pushes the config.
+  private var heartbeatEnabled: Bool { configBool("heartbeatEnabled", default: true) }
+
+  private var heartbeatInterval: TimeInterval {
+    let minutes = (config["heartbeatIntervalMin"] as? NSNumber)?.doubleValue ?? 60
+    return max(15, minutes) * 60
+  }
+
   // MARK: Bootstrap
 
   func bootstrap(launchedByLocation: Bool) {
@@ -78,6 +94,21 @@ final class LocationService: NSObject {
 
     UNUserNotificationCenter.current().delegate = self
 
+    // BGTaskScheduler requires every launch handler to be registered before
+    // the app finishes launching — bootstrap() runs first thing in
+    // didFinishLaunching, so this is the only safe place.
+    let registered = BGTaskScheduler.shared.register(
+      forTaskWithIdentifier: Self.heartbeatTaskId, using: .main) { [weak self] task in
+      guard let self = self, let refresh = task as? BGAppRefreshTask else {
+        task.setTaskCompleted(success: false)
+        return
+      }
+      self.handleHeartbeatTask(refresh)
+    }
+    if !registered {
+      NSLog("geo_probe: BGTask registration failed — identifier missing from Info.plist?")
+    }
+
     let center = NotificationCenter.default
     center.addObserver(forName: UIApplication.didBecomeActiveNotification,
                        object: nil, queue: .main) { [weak self] _ in
@@ -86,6 +117,7 @@ final class LocationService: NSObject {
     center.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                        object: nil, queue: .main) { [weak self] _ in
       self?.appState = "background"
+      self?.scheduleHeartbeat(replacePending: false)
     }
 
     applyConfig()
@@ -105,6 +137,11 @@ final class LocationService: NSObject {
       registerRegions()
     } else {
       stopAllRegionMonitoring()
+    }
+    if heartbeatEnabled {
+      scheduleHeartbeat(replacePending: true)
+    } else {
+      BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.heartbeatTaskId)
     }
   }
 
@@ -188,6 +225,15 @@ final class LocationService: NSObject {
       result(nil)
     case "getCurrentLocation":
       getCurrentLocation(result: result)
+    case "setTelegram":
+      if let args = call.arguments as? [String: Any] {
+        defaults.set(args, forKey: Self.telegramKey)
+      }
+      result(nil)
+    case "heartbeatNow":
+      // Full pipeline (JSONL event → notification → Telegram); the Future
+      // resolves after the Telegram attempt so the UI can confirm delivery.
+      performHeartbeat(trigger: "manual") { result(nil) }
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -230,6 +276,10 @@ final class LocationService: NSObject {
     let slc = configBool("slcEnabled", default: false)
     let regionMonitoring = configBool("regionMonitoringEnabled", default: true)
     let battery = Self.batteryPercent() ?? -1
+    let heartbeatOn = heartbeatEnabled
+    let heartbeatMin = (config["heartbeatIntervalMin"] as? NSNumber)?.intValue ?? 60
+    let lastHeartbeat =
+      (defaults.object(forKey: Self.lastHeartbeatTsKey) as? NSNumber)?.int64Value ?? 0
 
     // locationServicesEnabled() may block — never call it on the main thread.
     DispatchQueue.global(qos: .userInitiated).async {
@@ -250,6 +300,9 @@ final class LocationService: NSObject {
           "appVersion": appVersion,
           "osVersion": UIDevice.current.systemVersion,
           "batteryPercent": battery,
+          "heartbeatEnabled": heartbeatOn,
+          "heartbeatIntervalMin": heartbeatMin,
+          "lastNativeHeartbeatTs": lastHeartbeat,
         ]
         DispatchQueue.main.async { result(diag) }
       }
@@ -280,6 +333,247 @@ final class LocationService: NSObject {
     ]
   }
 
+  // MARK: Heartbeat (BGAppRefreshTask)
+
+  /// Submits the next heartbeat request. iOS treats earliestBeginDate as a
+  /// lower bound only — real delivery depends on usage patterns and
+  /// Background App Refresh; measuring that gap is itself diagnostic data.
+  private func scheduleHeartbeat(replacePending: Bool) {
+    guard heartbeatEnabled else { return }
+    let submit = {
+      let request = BGAppRefreshTaskRequest(identifier: Self.heartbeatTaskId)
+      request.earliestBeginDate = Date(timeIntervalSinceNow: self.heartbeatInterval)
+      do {
+        try BGTaskScheduler.shared.submit(request)
+      } catch {
+        // Expected on the simulator, where BGTaskScheduler is unavailable.
+        NSLog("geo_probe: BGTask submit failed: \(error)")
+      }
+    }
+    if replacePending {
+      submit()
+    } else {
+      // Entering background must not push a pending request further into the
+      // future for an active user — keep the earliest date already submitted.
+      BGTaskScheduler.shared.getPendingTaskRequests { pending in
+        if pending.contains(where: { $0.identifier == Self.heartbeatTaskId }) { return }
+        submit()
+      }
+    }
+  }
+
+  private func handleHeartbeatTask(_ task: BGAppRefreshTask) {
+    guard heartbeatEnabled else {
+      // A request submitted before the feature was switched off may still fire.
+      task.setTaskCompleted(success: true)
+      return
+    }
+    scheduleHeartbeat(replacePending: true) // chain the next run first
+    var completed = false
+    let finish: (Bool) -> Void = { success in // main thread only
+      if completed { return }
+      completed = true
+      task.setTaskCompleted(success: success)
+    }
+    // On expiry the JSONL event is already written — at worst the Telegram
+    // delivery is cut short.
+    task.expirationHandler = { DispatchQueue.main.async { finish(false) } }
+    performHeartbeat(trigger: "bgtask") { finish(true) }
+  }
+
+  /// Status snapshot → JSONL heartbeat event (FIRST — invariant 1) → local
+  /// notification → Telegram. [completion] fires on the main thread after the
+  /// Telegram attempt, so a BGTask can hold the process alive until then.
+  private func performHeartbeat(trigger: String, completion: @escaping () -> Void) {
+    let auth = Self.describe(manager.authorizationStatus)
+    let precise = manager.accuracyAuthorization == .fullAccuracy
+    let bar: String
+    switch UIApplication.shared.backgroundRefreshStatus {
+    case .available: bar = "available"
+    case .denied: bar = "denied"
+    case .restricted: bar = "restricted"
+    @unknown default: bar = "unknown"
+    }
+    let monitored = manager.monitoredRegions.count
+    let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    requestOneShotFix(timeout: 10) { fix in
+      UNUserNotificationCenter.current().getNotificationSettings { settings in
+        let notifOk = settings.authorizationStatus == .authorized
+          || settings.authorizationStatus == .provisional
+        DispatchQueue.main.async {
+          var detail: [String: Any] = [
+            "trigger": trigger,
+            "authorizationStatus": auth,
+            "accuracyAuthorization": precise ? "fullAccuracy" : "reducedAccuracy",
+            "backgroundRefreshStatus": bar,
+            "notificationsAuthorized": notifOk,
+            "monitoredRegionsCount": monitored,
+            "lowPowerMode": lowPower,
+          ]
+          if let fix = fix {
+            detail["fixAgeSec"] = Int((-fix.timestamp.timeIntervalSinceNow).rounded())
+          }
+          let json = (try? JSONSerialization.data(withJSONObject: detail))
+            .flatMap { String(data: $0, encoding: .utf8) }
+          self.writeEvent(type: "heartbeat", location: fix,
+                          timestampFromFix: false, detail: json)
+          self.defaults.set(Int64(Date().timeIntervalSince1970 * 1000),
+                            forKey: Self.lastHeartbeatTsKey)
+
+          let summary = self.heartbeatSummary(
+            auth: auth, precise: precise, bar: bar, notifOk: notifOk,
+            fix: fix, monitored: monitored, lowPower: lowPower)
+          if self.configBool("localNotifications", default: true) {
+            self.postHeartbeatNotification(body: summary)
+          }
+          let ru = Self.isRussian
+          let triggerLabel = trigger == "manual"
+            ? (ru ? "вручную" : "manual")
+            : (ru ? "фоновая задача" : "background task")
+          let fmt = DateFormatter()
+          fmt.dateFormat = "dd.MM HH:mm:ss"
+          let tgText = "💓 Heartbeat (\(triggerLabel))\n\(summary)\n"
+            + "🕐 \(fmt.string(from: Date())) · \(self.appState)"
+          // Barrier through ioQueue: even with Telegram off, completion (and
+          // the BGTask suspend that follows) must wait for the JSONL append.
+          self.ioQueue.async {
+            DispatchQueue.main.async {
+              self.sendTelegram(text: tgText, completion: completion)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /// One-shot fix for the heartbeat. Reuses the pendingLocationResults queue
+  /// (overlapping callers must each get an answer — invariant 8) and falls
+  /// back to the last cached fix on timeout: in the background with
+  /// WhenInUse-only authorization requestLocation() may deliver nothing.
+  private func requestOneShotFix(timeout: TimeInterval,
+                                 completion: @escaping (CLLocation?) -> Void) {
+    var done = false
+    let finish: (CLLocation?) -> Void = { loc in // main thread only
+      if done { return }
+      done = true
+      completion(loc)
+    }
+    getCurrentLocation { any in
+      guard let dict = any as? [String: Any],
+            let lat = dict["lat"] as? Double,
+            let lng = dict["lng"] as? Double else {
+        finish(self.manager.location)
+        return
+      }
+      let ts = (dict["ts"] as? NSNumber)
+        .map { Date(timeIntervalSince1970: $0.doubleValue / 1000) } ?? Date()
+      finish(CLLocation(
+        coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
+        altitude: 0,
+        horizontalAccuracy: dict["accuracy"] as? Double ?? -1,
+        verticalAccuracy: -1,
+        timestamp: ts))
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+      finish(self.manager.location)
+    }
+  }
+
+  private static var isRussian: Bool {
+    Locale.preferredLanguages.first?.hasPrefix("ru") ?? false
+  }
+
+  /// Human-readable status for the notification body and Telegram, RU/EN by
+  /// device language. Wording mirrors the ARB translations.
+  private func heartbeatSummary(auth: String, precise: Bool, bar: String,
+                                notifOk: Bool, fix: CLLocation?,
+                                monitored: Int, lowPower: Bool) -> String {
+    let ru = Self.isRussian
+    let authNames: [String: (en: String, ru: String)] = [
+      "always": ("Always", "Всегда"),
+      "whenInUse": ("When in use", "При использовании"),
+      "denied": ("Denied", "Запрещено"),
+      "notDetermined": ("Not requested", "Не запрошено"),
+      "restricted": ("Restricted", "Ограничено"),
+    ]
+    let authName = authNames[auth].map { ru ? $0.ru : $0.en } ?? auth
+    var lines: [String] = []
+    var authLine = "🔐 " + (ru ? "Геолокация: " : "Location: ") + authName
+    if !precise { authLine += ru ? " · приблизительная" : " · approximate" }
+    lines.append(authLine)
+    let barName: String
+    switch bar {
+    case "available": barName = ru ? "включено" : "on"
+    case "denied": barName = ru ? "выключено" : "off"
+    case "restricted": barName = ru ? "ограничено" : "restricted"
+    default: barName = bar
+    }
+    lines.append("🔄 " + (ru ? "Фоновое обновление: " : "Background refresh: ") + barName)
+    if let fix = fix {
+      var line = String(format: "📍 %.5f, %.5f",
+                        fix.coordinate.latitude, fix.coordinate.longitude)
+      if fix.horizontalAccuracy >= 0 {
+        line += String(format: " ±%.0f m", fix.horizontalAccuracy)
+      }
+      let ageMin = Int((-fix.timestamp.timeIntervalSinceNow / 60).rounded())
+      if ageMin >= 1 {
+        line += ru ? " (фикс \(ageMin) мин назад)" : " (fix \(ageMin) min old)"
+      }
+      lines.append(line)
+    } else {
+      lines.append(ru ? "📍 нет координат" : "📍 no fix")
+    }
+    var statusBits: [String] = []
+    if let battery = Self.batteryPercent() { statusBits.append("🔋 \(battery)%") }
+    statusBits.append((ru ? "зон: " : "zones: ") + "\(monitored)")
+    if lowPower { statusBits.append(ru ? "энергосбережение" : "low power") }
+    if !notifOk { statusBits.append(ru ? "уведомления запрещены" : "notifications off") }
+    lines.append(statusBits.joined(separator: " · "))
+    return lines.joined(separator: "\n")
+  }
+
+  private func postHeartbeatNotification(body: String) {
+    let content = UNMutableNotificationContent()
+    content.title = "💓 Heartbeat"
+    let fmt = DateFormatter()
+    fmt.dateFormat = "HH:mm:ss"
+    content.body = body + "\n🕐 \(fmt.string(from: Date())) · \(appState)"
+    content.sound = .default
+    UNUserNotificationCenter.current().add(
+      UNNotificationRequest(identifier: UUID().uuidString,
+                            content: content, trigger: nil))
+  }
+
+  /// Posts [text] to the Telegram Bot API with the credentials mirrored into
+  /// UserDefaults by the Dart side (`setTelegram`). Always calls [completion]
+  /// on the main thread — a BGTask must know when it may suspend.
+  private func sendTelegram(text: String, completion: @escaping () -> Void) {
+    let tg = defaults.dictionary(forKey: Self.telegramKey) ?? [:]
+    guard tg["enabled"] as? Bool == true,
+          let token = tg["token"] as? String, !token.isEmpty,
+          let chatId = tg["chatId"] as? String, !chatId.isEmpty,
+          let url = URL(string: "https://api.telegram.org/bot\(token)/sendMessage")
+    else {
+      completion()
+      return
+    }
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.timeoutInterval = 15
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try? JSONSerialization.data(
+      withJSONObject: ["chat_id": chatId, "text": text])
+    URLSession.shared.dataTask(with: request) { _, response, error in
+      if let error = error {
+        NSLog("geo_probe: heartbeat telegram failed: \(error.localizedDescription)")
+      } else if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+        NSLog("geo_probe: heartbeat telegram HTTP \(http.statusCode)")
+      }
+      DispatchQueue.main.async { completion() }
+    }.resume()
+  }
+
   // MARK: Event log (JSONL, written natively so terminated-state events survive)
 
   private var eventsFileURL: URL {
@@ -294,13 +588,16 @@ final class LocationService: NSObject {
   /// available); received_ts is "now". The difference is the delivery latency
   /// this whole test app exists to measure. Never log receipt time as event
   /// time — that is the §4.2 defect that turned "slow" into "lying".
+  /// Heartbeats pass timestampFromFix=false: their own time IS "now", and a
+  /// cached fix must not backdate them (its age goes into detail instead).
   private func writeEvent(type: String,
                           regionId: String? = nil,
                           location: CLLocation? = nil,
+                          timestampFromFix: Bool = true,
                           detail: String? = nil) {
     let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
     var eventTs = nowMs
-    if let loc = location {
+    if timestampFromFix, let loc = location {
       eventTs = Int64(loc.timestamp.timeIntervalSince1970 * 1000)
     }
     var dict: [String: Any] = [

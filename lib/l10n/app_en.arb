@@ -128,6 +128,19 @@
   "sectionDiagnostics": "Diagnostics",
   "localNotificationsTitle": "Event notifications",
   "localNotificationsSubtitle": "Show a banner on every enter, exit and movement",
+  "sectionHeartbeat": "Background heartbeat",
+  "heartbeatTitle": "Periodic status report",
+  "heartbeatSubtitle": "Background task: permission status, location and battery — as a notification and to Telegram. iOS chooses the actual timing.",
+  "heartbeatIntervalTitle": "Minimum interval",
+  "heartbeatIntervalValue": "{minutes} min",
+  "@heartbeatIntervalValue": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "heartbeatNowTitle": "Send heartbeat now",
+  "heartbeatNowSubtitle": "Test the notification and Telegram delivery",
+  "heartbeatSent": "Heartbeat sent",
   "sectionActions": "Actions",
   "requestPermissionsTitle": "Request permissions",
   "requestPermissionsSubtitle": "Notifications and location (\"Always\")",
@@ -173,5 +186,8 @@
   "diagLaunchedByLocation": "Launched by a location event",
   "diagAppVersion": "App version",
   "diagOsVersion": "iOS version",
-  "diagBatteryPercent": "Battery, %"
+  "diagBatteryPercent": "Battery, %",
+  "diagHeartbeatEnabled": "Background heartbeat",
+  "diagHeartbeatInterval": "Heartbeat interval",
+  "diagLastNativeHeartbeat": "Last background heartbeat"
 }

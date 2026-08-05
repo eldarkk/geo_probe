@@ -147,12 +147,18 @@ class GeoEvent {
 
 /// Engine configuration pushed to the native side and persisted there,
 /// so a terminated-state relaunch knows what to do.
+///
+/// Heartbeat defaults must match the Swift side (`heartbeatEnabled` /
+/// `heartbeatInterval` in AppDelegate.swift): native may run before Dart
+/// re-pushes the config after an app update.
 class AppConfig {
   final bool regionMonitoringEnabled;
   final bool slcEnabled;
   final bool notifyOnEntry;
   final bool notifyOnExit;
   final bool localNotifications;
+  final bool heartbeatEnabled;
+  final int heartbeatIntervalMin;
 
   const AppConfig({
     this.regionMonitoringEnabled = true,
@@ -160,6 +166,8 @@ class AppConfig {
     this.notifyOnEntry = true,
     this.notifyOnExit = true,
     this.localNotifications = true,
+    this.heartbeatEnabled = true,
+    this.heartbeatIntervalMin = 60,
   });
 
   AppConfig copyWith({
@@ -168,6 +176,8 @@ class AppConfig {
     bool? notifyOnEntry,
     bool? notifyOnExit,
     bool? localNotifications,
+    bool? heartbeatEnabled,
+    int? heartbeatIntervalMin,
   }) {
     return AppConfig(
       regionMonitoringEnabled: regionMonitoringEnabled ?? this.regionMonitoringEnabled,
@@ -175,6 +185,8 @@ class AppConfig {
       notifyOnEntry: notifyOnEntry ?? this.notifyOnEntry,
       notifyOnExit: notifyOnExit ?? this.notifyOnExit,
       localNotifications: localNotifications ?? this.localNotifications,
+      heartbeatEnabled: heartbeatEnabled ?? this.heartbeatEnabled,
+      heartbeatIntervalMin: heartbeatIntervalMin ?? this.heartbeatIntervalMin,
     );
   }
 
@@ -184,6 +196,8 @@ class AppConfig {
         'notifyOnEntry': notifyOnEntry,
         'notifyOnExit': notifyOnExit,
         'localNotifications': localNotifications,
+        'heartbeatEnabled': heartbeatEnabled,
+        'heartbeatIntervalMin': heartbeatIntervalMin,
       };
 
   String toJson() => jsonEncode(toMap());
@@ -194,6 +208,9 @@ class AppConfig {
         notifyOnEntry: m['notifyOnEntry'] as bool? ?? true,
         notifyOnExit: m['notifyOnExit'] as bool? ?? true,
         localNotifications: m['localNotifications'] as bool? ?? true,
+        heartbeatEnabled: m['heartbeatEnabled'] as bool? ?? true,
+        heartbeatIntervalMin:
+            (m['heartbeatIntervalMin'] as num?)?.toInt() ?? 60,
       );
 
   factory AppConfig.fromJson(String s) =>

@@ -55,6 +55,11 @@ class AppState extends ChangeNotifier {
     tgChatId = await db.getConfigValue('tg_chat') ?? '';
 
     await bridge.setConfig(config);
+    // Re-mirror Telegram credentials on every launch: the native heartbeat
+    // needs them without the engine, and older installs configured Telegram
+    // before the mirror existed.
+    await bridge.setTelegram(
+        enabled: tgEnabled, token: tgToken, chatId: tgChatId);
     await bridge.syncRegions(regions);
     await bridge.requestInitialPermissions();
 
@@ -182,6 +187,8 @@ class AppState extends ChangeNotifier {
     await db.setConfigValue('tg_enabled', enabled ? '1' : '0');
     await db.setConfigValue('tg_token', tgToken);
     await db.setConfigValue('tg_chat', tgChatId);
+    await bridge.setTelegram(
+        enabled: tgEnabled, token: tgToken, chatId: tgChatId);
     notifyListeners();
   }
 

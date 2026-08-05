@@ -91,6 +91,22 @@ class NativeBridge {
     await _invoke<void>('requestStateForRegions');
   }
 
+  /// Mirrors the Telegram logger credentials to native storage so the
+  /// background heartbeat can post without the Flutter engine running.
+  Future<void> setTelegram(
+      {required bool enabled,
+      required String token,
+      required String chatId}) async {
+    await _invoke<void>('setTelegram',
+        {'enabled': enabled, 'token': token, 'chatId': chatId});
+  }
+
+  /// Runs the native heartbeat pipeline immediately (JSONL event → local
+  /// notification → Telegram). Resolves after the Telegram attempt.
+  Future<void> heartbeatNow() async {
+    await _invoke<void>('heartbeatNow');
+  }
+
   /// One-shot foreground fix. Returns {lat, lng, accuracy, ts} or null.
   Future<Map<String, dynamic>?> getCurrentLocation() async {
     final res = await _invoke<Map<Object?, Object?>>('getCurrentLocation');

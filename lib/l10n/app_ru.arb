@@ -78,6 +78,14 @@
   "sectionDiagnostics": "Диагностика",
   "localNotificationsTitle": "Уведомления о событиях",
   "localNotificationsSubtitle": "Показывать баннер при каждом входе, выходе и перемещении",
+  "sectionHeartbeat": "Фоновый heartbeat",
+  "heartbeatTitle": "Периодический отчёт о статусе",
+  "heartbeatSubtitle": "Фоновая задача: статус разрешений, координаты и батарея — уведомлением и в Telegram. Фактическое время выбирает iOS.",
+  "heartbeatIntervalTitle": "Минимальный интервал",
+  "heartbeatIntervalValue": "{minutes} мин",
+  "heartbeatNowTitle": "Отправить heartbeat сейчас",
+  "heartbeatNowSubtitle": "Проверка уведомления и отправки в Telegram",
+  "heartbeatSent": "Heartbeat отправлен",
   "sectionActions": "Действия",
   "requestPermissionsTitle": "Запросить разрешения",
   "requestPermissionsSubtitle": "Уведомления и геолокация («Всегда»)",
@@ -107,5 +115,8 @@
   "diagLaunchedByLocation": "Запущено геособытием",
   "diagAppVersion": "Версия приложения",
   "diagOsVersion": "Версия iOS",
-  "diagBatteryPercent": "Батарея, %"
+  "diagBatteryPercent": "Батарея, %",
+  "diagHeartbeatEnabled": "Фоновый heartbeat",
+  "diagHeartbeatInterval": "Интервал heartbeat",
+  "diagLastNativeHeartbeat": "Последний фоновый heartbeat"
 }

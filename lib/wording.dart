@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 import 'l10n/app_localizations.dart';
 import 'models.dart';
 
@@ -66,6 +68,16 @@ String diagValueLabel(AppLocalizations t, String key, Object? value) {
       return authStatusLabel(t, '$value');
     case 'accuracyAuthorization':
       return value == 'fullAccuracy' ? t.accFull : t.accReduced;
+    case 'heartbeatIntervalMin':
+      if (value is num) return t.heartbeatIntervalValue(value.toInt());
+      return '$value';
+    case 'lastNativeHeartbeatTs':
+      // 0 = the native heartbeat has never run on this install.
+      if (value is num && value.toInt() > 0) {
+        return DateFormat('dd.MM HH:mm:ss')
+            .format(DateTime.fromMillisecondsSinceEpoch(value.toInt()));
+      }
+      return '—';
     case 'backgroundRefreshStatus':
       switch ('$value') {
         case 'available':

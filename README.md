@@ -154,6 +154,28 @@ permission), notification permission, monitored-region count, engine config,
 this snapshot is written on every foreground entry and shown on the
 Diagnostics tab (states that break background delivery are highlighted red).
 
+**Background heartbeat (BGAppRefreshTask).** A periodic status report that
+runs without the UI: permission status, a one-shot fix (falls back to the
+last cached fix after 10 s — with WhenInUse-only auth background requests
+deliver nothing), Background App Refresh, notification permission, battery,
+Low Power Mode, monitored-zone count. The pipeline is native-only, so it
+works even when the Flutter engine never spins up: JSONL heartbeat event
+*first* (invariant), then a local notification, then Telegram directly from
+Swift via URLSession (credentials mirrored to UserDefaults by `setTelegram`).
+`event_ts` is the heartbeat's own "now" — a cached fix must not backdate it,
+its age is recorded as `fixAgeSec` in `detail`. The configured interval
+(Settings, default 60 min) is only `earliestBeginDate`: iOS decides real
+delivery by usage patterns, battery and BAR — the requested-vs-actual gap is
+itself a measurement this app exists to collect. The task re-chains itself on
+every run, re-arms on config change and on entering background, and is
+cancelled when disabled. Settings → "Send heartbeat now" runs the same
+pipeline immediately (works on the simulator too, where BGTaskScheduler is
+unavailable). To force a scheduled run on a device under Xcode/lldb:
+
+```
+e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.clockster.geoProbe.heartbeat"]
+```
+
 ### 2.7 Local notifications
 
 Posted natively for enter/exit/SLC/relaunch so triggers are observable
@@ -193,7 +215,11 @@ permission_change/error` events are POSTed to the Bot API as they happen;
 events accumulated while backgrounded are sent as **one** combined message on
 the next open (rate limits). The JSONL drain re-delivers events already seen
 live — only events new to the SQLite journal are forwarded, so nothing is
-sent twice. Heartbeats and `state_initial` are not sent.
+sent twice. Heartbeats and `state_initial` are not sent by the Dart
+forwarder: heartbeats go to Telegram **natively from Swift** as part of the
+background-heartbeat pipeline (§2.6), which is also why `heartbeat` must
+never be added to `AppState._tgTypes` — the JSONL drain would double-send
+them. Credentials are mirrored to native UserDefaults via `setTelegram`.
 The local journal remains the source of truth — Telegram is a mirror that
 only works while iOS lets the app run.
 
@@ -213,6 +239,7 @@ titles localized in Swift. `CFBundleLocalizations` declares en+ru.
 | Geofences fire on network location, ~100–150 m minimum radius | slider floor 100 m, hint in dialog |
 | After reboot, events resume only after first unlock | test-protocol item |
 | BAR off → no background relaunches at all | shown red in diagnostics |
+| BGAppRefreshTask timing is opportunistic (usage-pattern budgeted); BAR off stops it entirely | heartbeat interval is a floor, not a schedule; absence of heartbeats is itself signal |
 | Always-upgrade prompt shown once per install | escalation is a deliberate button |
 | The keyboard summoned together with a dialog hangs debug sessions under the VSCode debugger (flutter/flutter#123021) | no `autofocus` in dialogs |
 
@@ -232,6 +259,8 @@ titles localized in Swift. `CFBundleLocalizations` declares en+ru.
 | `drainNativeEvents` | — | list of event maps | read & clear the native JSONL buffer |
 | `requestStateForRegions` | — | null | ask inside/outside for every region |
 | `getCurrentLocation` | — | `{lat,lng,accuracy,ts}` or null | one-shot foreground fix |
+| `setTelegram` | `{enabled,token,chatId}` | null | mirror TG credentials for the native heartbeat |
+| `heartbeatNow` | — | null (after the TG attempt) | run the heartbeat pipeline immediately |
 
 `EventChannel('geo_probe/events')`: pushes the same event maps live while the
 engine runs. Consumers must deduplicate by `uuid` (events also land in JSONL).
@@ -241,7 +270,10 @@ Event map keys: `uuid`, `type`, `region_id?`, `lat?`, `lng?`, `accuracy?`,
 `app_state`, `battery?`, `detail?`.
 
 Config map keys: `regionMonitoringEnabled`, `slcEnabled`, `notifyOnEntry`,
-`notifyOnExit`, `localNotifications`.
+`notifyOnExit`, `localNotifications`, `heartbeatEnabled`,
+`heartbeatIntervalMin`. Dart defaults (models.dart) and native fallbacks
+(AppDelegate.swift) must stay identical — native may run from a
+terminated-state relaunch before Dart re-pushes the config.
 
 ---
 

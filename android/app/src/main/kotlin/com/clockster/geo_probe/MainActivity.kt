@@ -32,7 +32,7 @@ class MainActivity : FlutterActivity() {
                     ),
                 )
                 "syncRegions", "setConfig", "requestStateForRegions",
-                "requestInitialPermissions",
+                "requestInitialPermissions", "setTelegram", "heartbeatNow",
                 -> result.success(null)
                 "drainNativeEvents" -> result.success(emptyList<Map<String, Any>>())
                 "getCurrentLocation" -> result.success(null)

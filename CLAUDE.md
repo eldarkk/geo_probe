@@ -89,6 +89,8 @@ integration_test/              longpress, pipeline, geofence E2E
 3. **No `UIBackgroundModes: location`** in Info.plist, ever (App Review
    2.5.4 trigger; region monitoring and SLC don't need it). Related:
    `manager.allowsBackgroundLocationUpdates` stays `false`.
+   `UIBackgroundModes` currently contains only `fetch` — required by the
+   heartbeat BGAppRefreshTask; that one is fine.
 
 4. **`LocationService.shared.bootstrap(...)` must run inside
    `didFinishLaunchingWithOptions` before `super`** — on a location-triggered
@@ -126,6 +128,16 @@ integration_test/              longpress, pipeline, geofence E2E
     `sharePositionOrigin` derived from a real RenderBox (see the export
     button in journal_screen), or share_plus throws on iPad/recent iOS.
 
+11. **Heartbeat BGTask discipline.** `BGTaskScheduler.register` happens in
+    `bootstrap()` (must complete before launch ends); the identifier
+    `com.clockster.geoProbe.heartbeat` is fixed in Info.plist. The heartbeat
+    writes JSONL **before** notification/Telegram (invariant 1 applies), and
+    its `event_ts` is "now" (`timestampFromFix: false`) — the possibly-cached
+    fix must not backdate it. Heartbeat Telegram goes out natively from
+    Swift; never add `heartbeat` to `AppState._tgTypes` or the JSONL drain
+    double-sends it. `heartbeatEnabled`/`heartbeatIntervalMin` defaults in
+    Swift (true/60) must equal the `AppConfig` defaults.
+
 ## Localization
 
 Standard gen-l10n: edit `lib/l10n/app_en.arb` (template) **and**
@@ -155,7 +167,8 @@ Adding one requires: constant + `all` list, label in both ARB files +
 `wording.dart`, icon/color in journal_screen, and (if native-originated) the
 Swift `writeEvent` call. Telegram forwards only the types in
 `AppState._tgTypes` — heartbeats and `state_initial` are deliberately
-excluded as noise.
+excluded there; the periodic background heartbeat posts to Telegram natively
+from Swift instead (see invariant 11).
 
 ## Android status
 

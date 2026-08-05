@@ -66,6 +66,12 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
         return t.diagOsVersion;
       case 'batteryPercent':
         return t.diagBatteryPercent;
+      case 'heartbeatEnabled':
+        return t.diagHeartbeatEnabled;
+      case 'heartbeatIntervalMin':
+        return t.diagHeartbeatInterval;
+      case 'lastNativeHeartbeatTs':
+        return t.diagLastNativeHeartbeat;
       default:
         return key;
     }

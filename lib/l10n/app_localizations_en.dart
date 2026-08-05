@@ -255,6 +255,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'Show a banner on every enter, exit and movement';
 
   @override
+  String get sectionHeartbeat => 'Background heartbeat';
+
+  @override
+  String get heartbeatTitle => 'Periodic status report';
+
+  @override
+  String get heartbeatSubtitle =>
+      'Background task: permission status, location and battery — as a notification and to Telegram. iOS chooses the actual timing.';
+
+  @override
+  String get heartbeatIntervalTitle => 'Minimum interval';
+
+  @override
+  String heartbeatIntervalValue(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get heartbeatNowTitle => 'Send heartbeat now';
+
+  @override
+  String get heartbeatNowSubtitle =>
+      'Test the notification and Telegram delivery';
+
+  @override
+  String get heartbeatSent => 'Heartbeat sent';
+
+  @override
   String get sectionActions => 'Actions';
 
   @override
@@ -345,4 +373,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagBatteryPercent => 'Battery, %';
+
+  @override
+  String get diagHeartbeatEnabled => 'Background heartbeat';
+
+  @override
+  String get diagHeartbeatInterval => 'Heartbeat interval';
+
+  @override
+  String get diagLastNativeHeartbeat => 'Last background heartbeat';
 }

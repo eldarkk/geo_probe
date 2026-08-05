@@ -13,76 +13,131 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final config = state.config;
     return Scaffold(
       appBar: AppBar(title: Text(t.tabSettings)),
-      body: ListView(
-        children: [
-          _SectionHeader(t.sectionGeofencing),
-          SwitchListTile(
-            title: Text(t.regionMonitoringTitle),
-            subtitle: Text(t.regionMonitoringSubtitle),
-            value: config.regionMonitoringEnabled,
-            onChanged: (v) =>
-                state.setConfig(config.copyWith(regionMonitoringEnabled: v)),
-          ),
-          SwitchListTile(
-            title: Text(t.notifyOnEntryTitle),
-            value: config.notifyOnEntry,
-            onChanged: config.regionMonitoringEnabled
-                ? (v) => state.setConfig(config.copyWith(notifyOnEntry: v))
-                : null,
-          ),
-          SwitchListTile(
-            title: Text(t.notifyOnExitTitle),
-            value: config.notifyOnExit,
-            onChanged: config.regionMonitoringEnabled
-                ? (v) => state.setConfig(config.copyWith(notifyOnExit: v))
-                : null,
-          ),
-          _SectionHeader(t.sectionSlc),
-          SwitchListTile(
-            title: Text(t.slcTitle),
-            subtitle: Text(t.slcSubtitle),
-            value: config.slcEnabled,
-            onChanged: (v) => state.setConfig(config.copyWith(slcEnabled: v)),
-          ),
-          _SectionHeader(t.sectionDiagnostics),
-          SwitchListTile(
-            title: Text(t.localNotificationsTitle),
-            subtitle: Text(t.localNotificationsSubtitle),
-            value: config.localNotifications,
-            onChanged: (v) =>
-                state.setConfig(config.copyWith(localNotifications: v)),
-          ),
-          _SectionHeader(t.sectionActions),
-          ListTile(
-            leading: const Icon(Icons.lock_open),
-            title: Text(t.requestPermissionsTitle),
-            subtitle: Text(t.requestPermissionsSubtitle),
-            onTap: () async {
-              final status = await state.bridge.requestPermissions();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content:
-                        Text(t.permissionResult(authStatusLabel(t, status)))));
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.sync),
-            title: Text(t.resyncTitle),
-            onTap: () async {
-              await state.resyncRegions();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(t.resyncDone)));
-              }
-            },
-          ),
-          _SectionHeader(t.sectionTelegram),
-          _TelegramSection(state: state),
-        ],
+      // Rebuild on AppState changes so switch/dropdown values reflect the
+      // config that setConfig just persisted (same pattern as MapScreen).
+      body: ListenableBuilder(
+        listenable: state,
+        builder: (context, _) {
+          final config = state.config;
+          return ListView(
+            children: [
+              _SectionHeader(t.sectionGeofencing),
+              SwitchListTile(
+                title: Text(t.regionMonitoringTitle),
+                subtitle: Text(t.regionMonitoringSubtitle),
+                value: config.regionMonitoringEnabled,
+                onChanged: (v) => state
+                    .setConfig(config.copyWith(regionMonitoringEnabled: v)),
+              ),
+              SwitchListTile(
+                title: Text(t.notifyOnEntryTitle),
+                value: config.notifyOnEntry,
+                onChanged: config.regionMonitoringEnabled
+                    ? (v) => state.setConfig(config.copyWith(notifyOnEntry: v))
+                    : null,
+              ),
+              SwitchListTile(
+                title: Text(t.notifyOnExitTitle),
+                value: config.notifyOnExit,
+                onChanged: config.regionMonitoringEnabled
+                    ? (v) => state.setConfig(config.copyWith(notifyOnExit: v))
+                    : null,
+              ),
+              _SectionHeader(t.sectionSlc),
+              SwitchListTile(
+                title: Text(t.slcTitle),
+                subtitle: Text(t.slcSubtitle),
+                value: config.slcEnabled,
+                onChanged: (v) =>
+                    state.setConfig(config.copyWith(slcEnabled: v)),
+              ),
+              _SectionHeader(t.sectionDiagnostics),
+              SwitchListTile(
+                title: Text(t.localNotificationsTitle),
+                subtitle: Text(t.localNotificationsSubtitle),
+                value: config.localNotifications,
+                onChanged: (v) =>
+                    state.setConfig(config.copyWith(localNotifications: v)),
+              ),
+              _SectionHeader(t.sectionHeartbeat),
+              SwitchListTile(
+                title: Text(t.heartbeatTitle),
+                subtitle: Text(t.heartbeatSubtitle),
+                value: config.heartbeatEnabled,
+                onChanged: (v) =>
+                    state.setConfig(config.copyWith(heartbeatEnabled: v)),
+              ),
+              ListTile(
+                title: Text(t.heartbeatIntervalTitle),
+                trailing: DropdownButton<int>(
+                  // The stored value always stays selectable even if it is
+                  // not one of the presets.
+                  value: config.heartbeatIntervalMin,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    for (final minutes in ({30, 60, 120, 360}
+                          ..add(config.heartbeatIntervalMin))
+                        .toList()
+                      ..sort())
+                      DropdownMenuItem(
+                        value: minutes,
+                        child: Text(t.heartbeatIntervalValue(minutes)),
+                      ),
+                  ],
+                  onChanged: config.heartbeatEnabled
+                      ? (v) {
+                          if (v != null) {
+                            state.setConfig(
+                                config.copyWith(heartbeatIntervalMin: v));
+                          }
+                        }
+                      : null,
+                ),
+              ),
+              _SectionHeader(t.sectionActions),
+              ListTile(
+                leading: const Icon(Icons.lock_open),
+                title: Text(t.requestPermissionsTitle),
+                subtitle: Text(t.requestPermissionsSubtitle),
+                onTap: () async {
+                  final status = await state.bridge.requestPermissions();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(
+                            t.permissionResult(authStatusLabel(t, status)))));
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sync),
+                title: Text(t.resyncTitle),
+                onTap: () async {
+                  await state.resyncRegions();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text(t.resyncDone)));
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.monitor_heart),
+                title: Text(t.heartbeatNowTitle),
+                subtitle: Text(t.heartbeatNowSubtitle),
+                onTap: () async {
+                  await state.bridge.heartbeatNow();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(t.heartbeatSent)));
+                  }
+                },
+              ),
+              _SectionHeader(t.sectionTelegram),
+              _TelegramSection(state: state),
+            ],
+          );
+        },
       ),
     );
   }

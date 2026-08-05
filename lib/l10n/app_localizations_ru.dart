@@ -257,6 +257,34 @@ class AppLocalizationsRu extends AppLocalizations {
       'Показывать баннер при каждом входе, выходе и перемещении';
 
   @override
+  String get sectionHeartbeat => 'Фоновый heartbeat';
+
+  @override
+  String get heartbeatTitle => 'Периодический отчёт о статусе';
+
+  @override
+  String get heartbeatSubtitle =>
+      'Фоновая задача: статус разрешений, координаты и батарея — уведомлением и в Telegram. Фактическое время выбирает iOS.';
+
+  @override
+  String get heartbeatIntervalTitle => 'Минимальный интервал';
+
+  @override
+  String heartbeatIntervalValue(int minutes) {
+    return '$minutes мин';
+  }
+
+  @override
+  String get heartbeatNowTitle => 'Отправить heartbeat сейчас';
+
+  @override
+  String get heartbeatNowSubtitle =>
+      'Проверка уведомления и отправки в Telegram';
+
+  @override
+  String get heartbeatSent => 'Heartbeat отправлен';
+
+  @override
   String get sectionActions => 'Действия';
 
   @override
@@ -347,4 +375,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get diagBatteryPercent => 'Батарея, %';
+
+  @override
+  String get diagHeartbeatEnabled => 'Фоновый heartbeat';
+
+  @override
+  String get diagHeartbeatInterval => 'Интервал heartbeat';
+
+  @override
+  String get diagLastNativeHeartbeat => 'Последний фоновый heartbeat';
 }
