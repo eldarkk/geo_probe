@@ -118,7 +118,11 @@ integration_test/              longpress, pipeline, geofence E2E
 
 8. **All `getCurrentLocation` callers are queued** (`pendingLocationResults`
    array in Swift) — overlapping calls must each get an answer or the Dart
-   Future hangs forever. Don't collapse it back to a single slot.
+   Future hangs forever. Don't collapse it back to a single slot. Waiters
+   carry an id and any caller with its own timeout (the heartbeat) must
+   `withdrawFixWaiter` when it gives up: only the first waiter triggers
+   `requestLocation()`, so a stranded entry silently starves every later
+   caller.
 
 9. **No `autofocus: true` on TextFields inside dialogs** — summoning the
    keyboard with the dialog hangs debug sessions on physical iOS devices

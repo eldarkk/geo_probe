@@ -42,8 +42,9 @@ final class LocationService: NSObject {
   private var eventSink: FlutterEventSink?
   // Every getCurrentLocation caller waiting for a fix. An array, not a single
   // slot: overlapping calls (initState + FAB) must all get their answer, or
-  // the overwritten Dart Future would hang forever.
-  private var pendingLocationResults: [FlutterResult] = []
+  // the overwritten Dart Future would hang forever. Entries carry an id so an
+  // internal caller that gave up can withdraw instead of clogging the queue.
+  private var pendingLocationResults: [(id: UUID, result: FlutterResult)] = []
   private var launchedByLocation = false
   // Tracked manually so callbacks never need UIApplication on a background thread.
   private var appState = "launching"
@@ -127,7 +128,12 @@ final class LocationService: NSObject {
     }
   }
 
-  private func applyConfig() {
+  /// [rescheduleHeartbeat] must be true ONLY when the heartbeat settings
+  /// actually changed. BGTask requests survive relaunches, and every launch
+  /// pushes a config down: resubmitting unconditionally would restart the
+  /// interval each time the app opens, so a frequently used app would never
+  /// see a background heartbeat at all.
+  private func applyConfig(rescheduleHeartbeat: Bool = false) {
     if configBool("slcEnabled", default: false) {
       manager.startMonitoringSignificantLocationChanges()
     } else {
@@ -139,7 +145,7 @@ final class LocationService: NSObject {
       stopAllRegionMonitoring()
     }
     if heartbeatEnabled {
-      scheduleHeartbeat(replacePending: true)
+      scheduleHeartbeat(replacePending: rescheduleHeartbeat)
     } else {
       BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.heartbeatTaskId)
     }
@@ -212,8 +218,10 @@ final class LocationService: NSObject {
       result(nil)
     case "setConfig":
       if let cfg = call.arguments as? [String: Any] {
+        let before = [heartbeatEnabled ? 1 : 0, Int(heartbeatInterval)]
         config = cfg
-        applyConfig()
+        let after = [heartbeatEnabled ? 1 : 0, Int(heartbeatInterval)]
+        applyConfig(rescheduleHeartbeat: before != after)
       }
       result(nil)
     case "drainNativeEvents":
@@ -316,12 +324,29 @@ final class LocationService: NSObject {
       result(Self.fixMap(last))
       return
     }
-    pendingLocationResults.append(result)
-    // One in-flight request serves every waiter; calling requestLocation()
-    // again would cancel the previous request.
+    enqueueFixWaiter(result)
+  }
+
+  /// Registers a waiter for the next fix and returns its id. Only the first
+  /// waiter triggers requestLocation(): calling it again would cancel the
+  /// in-flight request.
+  @discardableResult
+  private func enqueueFixWaiter(_ handler: @escaping FlutterResult) -> UUID {
+    let id = UUID()
+    pendingLocationResults.append((id: id, result: handler))
     if pendingLocationResults.count == 1 {
       manager.requestLocation()
     }
+    return id
+  }
+
+  /// Drops a waiter that gave up. Mandatory for the background heartbeat:
+  /// CoreLocation may answer neither success nor failure before iOS suspends
+  /// the process, and a stranded entry would keep count > 1 forever — which
+  /// suppresses requestLocation() for every later caller and hangs their Dart
+  /// Futures (invariant 8).
+  private func withdrawFixWaiter(_ id: UUID) {
+    pendingLocationResults.removeAll { $0.id == id }
   }
 
   private static func fixMap(_ location: CLLocation) -> [String: Any] {
@@ -331,6 +356,21 @@ final class LocationService: NSObject {
       "accuracy": location.horizontalAccuracy,
       "ts": Int64(location.timestamp.timeIntervalSince1970 * 1000),
     ]
+  }
+
+  /// Rebuilds a CLLocation from the fixMap dictionary handed to fix waiters.
+  private static func location(fromFixMap any: Any?) -> CLLocation? {
+    guard let dict = any as? [String: Any],
+          let lat = dict["lat"] as? Double,
+          let lng = dict["lng"] as? Double else { return nil }
+    let ts = (dict["ts"] as? NSNumber)
+      .map { Date(timeIntervalSince1970: $0.doubleValue / 1000) } ?? Date()
+    return CLLocation(
+      coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
+      altitude: 0,
+      horizontalAccuracy: dict["accuracy"] as? Double ?? -1,
+      verticalAccuracy: -1,
+      timestamp: ts)
   }
 
   // MARK: Heartbeat (BGAppRefreshTask)
@@ -418,8 +458,13 @@ final class LocationService: NSObject {
             .flatMap { String(data: $0, encoding: .utf8) }
           self.writeEvent(type: "heartbeat", location: fix,
                           timestampFromFix: false, detail: json)
-          self.defaults.set(Int64(Date().timeIntervalSince1970 * 1000),
-                            forKey: Self.lastHeartbeatTsKey)
+          if trigger == "bgtask" {
+            // Only real background runs may stamp this: it is the metric that
+            // answers "does iOS actually fire the task?", so a manual test
+            // press must not forge it.
+            self.defaults.set(Int64(Date().timeIntervalSince1970 * 1000),
+                              forKey: Self.lastHeartbeatTsKey)
+          }
 
           let summary = self.heartbeatSummary(
             auth: auth, precise: precise, bar: bar, notifOk: notifOk,
@@ -447,36 +492,29 @@ final class LocationService: NSObject {
     }
   }
 
-  /// One-shot fix for the heartbeat. Reuses the pendingLocationResults queue
-  /// (overlapping callers must each get an answer — invariant 8) and falls
-  /// back to the last cached fix on timeout: in the background with
-  /// WhenInUse-only authorization requestLocation() may deliver nothing.
+  /// One-shot fix for the heartbeat. Shares the fix-waiter queue with
+  /// getCurrentLocation (overlapping callers must each get an answer —
+  /// invariant 8) and falls back to the last cached fix on timeout: in the
+  /// background with WhenInUse-only authorization requestLocation() may
+  /// deliver nothing at all. On timeout the waiter is withdrawn so it cannot
+  /// block later callers.
   private func requestOneShotFix(timeout: TimeInterval,
                                  completion: @escaping (CLLocation?) -> Void) {
-    var done = false
-    let finish: (CLLocation?) -> Void = { loc in // main thread only
+    if let last = manager.location, -last.timestamp.timeIntervalSinceNow < 15 {
+      completion(last)
+      return
+    }
+    var done = false // main thread only
+    let id = enqueueFixWaiter { [weak self] any in
       if done { return }
       done = true
-      completion(loc)
+      completion(Self.location(fromFixMap: any) ?? self?.manager.location)
     }
-    getCurrentLocation { any in
-      guard let dict = any as? [String: Any],
-            let lat = dict["lat"] as? Double,
-            let lng = dict["lng"] as? Double else {
-        finish(self.manager.location)
-        return
-      }
-      let ts = (dict["ts"] as? NSNumber)
-        .map { Date(timeIntervalSince1970: $0.doubleValue / 1000) } ?? Date()
-      finish(CLLocation(
-        coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
-        altitude: 0,
-        horizontalAccuracy: dict["accuracy"] as? Double ?? -1,
-        verticalAccuracy: -1,
-        timestamp: ts))
-    }
-    DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
-      finish(self.manager.location)
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+      if done { return }
+      done = true
+      self?.withdrawFixWaiter(id)
+      completion(self?.manager.location)
     }
   }
 
@@ -740,7 +778,7 @@ extension LocationService: CLLocationManagerDelegate {
       let pending = pendingLocationResults
       pendingLocationResults = []
       let fix = Self.fixMap(latest)
-      DispatchQueue.main.async { pending.forEach { $0(fix) } }
+      DispatchQueue.main.async { pending.forEach { $0.result(fix) } }
       return
     }
     // No continuous foreground updates in this app: an unsolicited delivery
@@ -776,7 +814,7 @@ extension LocationService: CLLocationManagerDelegate {
     if !pendingLocationResults.isEmpty {
       let pending = pendingLocationResults
       pendingLocationResults = []
-      DispatchQueue.main.async { pending.forEach { $0(nil) } }
+      DispatchQueue.main.async { pending.forEach { $0.result(nil) } }
     }
     writeEvent(type: "error", detail: "didFail: \(error.localizedDescription)")
   }

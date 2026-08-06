@@ -166,9 +166,13 @@ Swift via URLSession (credentials mirrored to UserDefaults by `setTelegram`).
 its age is recorded as `fixAgeSec` in `detail`. The configured interval
 (Settings, default 60 min) is only `earliestBeginDate`: iOS decides real
 delivery by usage patterns, battery and BAR — the requested-vs-actual gap is
-itself a measurement this app exists to collect. The task re-chains itself on
-every run, re-arms on config change and on entering background, and is
-cancelled when disabled. Settings → "Send heartbeat now" runs the same
+itself a measurement this app exists to collect. The task re-chains itself
+after every run, re-arms on entering background only when nothing is pending,
+and is cancelled when disabled. It is resubmitted **only when the heartbeat
+settings themselves change**: BGTask requests survive relaunches and Dart
+pushes a config on every launch, so resubmitting unconditionally would
+restart the interval each time the app opens and a frequently used app would
+never see a background run. Settings → "Send heartbeat now" runs the same
 pipeline immediately (works on the simulator too, where BGTaskScheduler is
 unavailable). To force a scheduled run on a device under Xcode/lldb:
 
