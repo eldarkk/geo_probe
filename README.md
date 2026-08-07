@@ -154,6 +154,15 @@ permission), notification permission, monitored-region count, engine config,
 this snapshot is written on every foreground entry and shown on the
 Diagnostics tab (states that break background delivery are highlighted red).
 
+It also reports the state of the heartbeat scheduler itself:
+`bgTaskRegistered` (the launch handler was accepted — false means the
+identifier is missing from Info.plist), `bgTaskPendingInMin` (minutes until
+`earliestBeginDate`; `0` = due and waiting on iOS, `-1` = **nothing queued**,
+so the heartbeat can never fire) and `bgTaskSubmitError` (`"none"`, or the
+last `BGTaskScheduler.submit` rejection — always populated on the simulator).
+Without these three, "iOS is throttling the task" and "the request was never
+accepted" look identical from the outside.
+
 **Background heartbeat (BGAppRefreshTask).** A periodic status report that
 runs without the UI: permission status, a one-shot fix (falls back to the
 last cached fix after 10 s — with WhenInUse-only auth background requests
@@ -179,6 +188,17 @@ unavailable). To force a scheduled run on a device under Xcode/lldb:
 ```
 e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.clockster.geoProbe.heartbeat"]
 ```
+
+That lldb call is not a convenience, it is the **only** way to see a scheduled
+run during development: while a debugger is attached (`flutter run`, Xcode
+Run) iOS does not launch BGTasks on its own, so a debug session will show
+`bgTaskPendingInMin` counting down and nothing ever firing. Measuring the real
+cadence therefore requires a TestFlight/Ad Hoc build on an unplugged device,
+with the app backgrounded rather than swiped away — a user force-quit cancels
+every pending BGTask request until the app is opened again. Under those
+conditions the first run typically lands hours after `earliestBeginDate`;
+`lastNativeHeartbeatTs` (stamped only by `trigger: "bgtask"`) is the proof it
+happened.
 
 ### 2.7 Local notifications
 

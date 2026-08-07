@@ -48,6 +48,11 @@ final class LocationService: NSObject {
   private var launchedByLocation = false
   // Tracked manually so callbacks never need UIApplication on a background thread.
   private var appState = "launching"
+  // Heartbeat scheduler bookkeeping. Without it there is no way to tell
+  // "iOS never ran the task" from "the request was never accepted" — the two
+  // failures look identical from the outside.
+  private var bgTaskRegistered = false
+  private var lastBgSubmitError: String?
 
   private static let configKey = "geo_probe.config"
   private static let regionsKey = "geo_probe.regions"
@@ -106,6 +111,7 @@ final class LocationService: NSObject {
       }
       self.handleHeartbeatTask(refresh)
     }
+    bgTaskRegistered = registered
     if !registered {
       NSLog("geo_probe: BGTask registration failed — identifier missing from Info.plist?")
     }
@@ -288,31 +294,47 @@ final class LocationService: NSObject {
     let heartbeatMin = (config["heartbeatIntervalMin"] as? NSNumber)?.intValue ?? 60
     let lastHeartbeat =
       (defaults.object(forKey: Self.lastHeartbeatTsKey) as? NSNumber)?.int64Value ?? 0
+    let registered = bgTaskRegistered
+    let submitError = lastBgSubmitError ?? "none"
 
     // locationServicesEnabled() may block — never call it on the main thread.
     DispatchQueue.global(qos: .userInitiated).async {
       let servicesEnabled = CLLocationManager.locationServicesEnabled()
-      UNUserNotificationCenter.current().getNotificationSettings { settings in
-        let notifAuthorized = settings.authorizationStatus == .authorized
-          || settings.authorizationStatus == .provisional
-        let diag: [String: Any] = [
-          "authorizationStatus": auth,
-          "accuracyAuthorization": accuracy,
-          "locationServicesEnabled": servicesEnabled,
-          "backgroundRefreshStatus": refreshStatus,
-          "notificationsAuthorized": notifAuthorized,
-          "monitoredRegionsCount": monitoredCount,
-          "slcEnabled": slc,
-          "regionMonitoringEnabled": regionMonitoring,
-          "launchedByLocationThisRun": launched,
-          "appVersion": appVersion,
-          "osVersion": UIDevice.current.systemVersion,
-          "batteryPercent": battery,
-          "heartbeatEnabled": heartbeatOn,
-          "heartbeatIntervalMin": heartbeatMin,
-          "lastNativeHeartbeatTs": lastHeartbeat,
-        ]
-        DispatchQueue.main.async { result(diag) }
+      // -1 = nothing queued (the scheduler dropped it, or it was never
+      // submitted); 0 = due, iOS is simply not running it yet.
+      BGTaskScheduler.shared.getPendingTaskRequests { pending in
+        let pendingInMin: Int
+        if let request = pending.first(where: { $0.identifier == Self.heartbeatTaskId }) {
+          let due = request.earliestBeginDate?.timeIntervalSinceNow ?? 0
+          pendingInMin = max(0, Int((due / 60).rounded(.up)))
+        } else {
+          pendingInMin = -1
+        }
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+          let notifAuthorized = settings.authorizationStatus == .authorized
+            || settings.authorizationStatus == .provisional
+          let diag: [String: Any] = [
+            "authorizationStatus": auth,
+            "accuracyAuthorization": accuracy,
+            "locationServicesEnabled": servicesEnabled,
+            "backgroundRefreshStatus": refreshStatus,
+            "notificationsAuthorized": notifAuthorized,
+            "monitoredRegionsCount": monitoredCount,
+            "slcEnabled": slc,
+            "regionMonitoringEnabled": regionMonitoring,
+            "launchedByLocationThisRun": launched,
+            "appVersion": appVersion,
+            "osVersion": UIDevice.current.systemVersion,
+            "batteryPercent": battery,
+            "heartbeatEnabled": heartbeatOn,
+            "heartbeatIntervalMin": heartbeatMin,
+            "lastNativeHeartbeatTs": lastHeartbeat,
+            "bgTaskRegistered": registered,
+            "bgTaskPendingInMin": pendingInMin,
+            "bgTaskSubmitError": submitError,
+          ]
+          DispatchQueue.main.async { result(diag) }
+        }
       }
     }
   }
@@ -385,9 +407,13 @@ final class LocationService: NSObject {
       request.earliestBeginDate = Date(timeIntervalSinceNow: self.heartbeatInterval)
       do {
         try BGTaskScheduler.shared.submit(request)
+        DispatchQueue.main.async { self.lastBgSubmitError = nil }
       } catch {
         // Expected on the simulator, where BGTaskScheduler is unavailable.
+        // Surfaced in diagnostics: a rejected submit is otherwise invisible.
         NSLog("geo_probe: BGTask submit failed: \(error)")
+        let text = (error as NSError).localizedDescription
+        DispatchQueue.main.async { self.lastBgSubmitError = text }
       }
     }
     if replacePending {

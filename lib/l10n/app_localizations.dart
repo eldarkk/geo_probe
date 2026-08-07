@@ -763,6 +763,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Last background heartbeat'**
   String get diagLastNativeHeartbeat;
+
+  /// No description provided for @diagBgTaskRegistered.
+  ///
+  /// In en, this message translates to:
+  /// **'Background task registered'**
+  String get diagBgTaskRegistered;
+
+  /// No description provided for @diagBgTaskPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Next background task'**
+  String get diagBgTaskPending;
+
+  /// No description provided for @diagBgTaskSubmitError.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduling error'**
+  String get diagBgTaskSubmitError;
+
+  /// No description provided for @bgTaskNotQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'not queued'**
+  String get bgTaskNotQueued;
+
+  /// No description provided for @bgTaskDueNow.
+  ///
+  /// In en, this message translates to:
+  /// **'due, waiting for iOS'**
+  String get bgTaskDueNow;
+
+  /// No description provided for @bgTaskPendingIn.
+  ///
+  /// In en, this message translates to:
+  /// **'in {min} min'**
+  String bgTaskPendingIn(int min);
 }
 
 class _AppLocalizationsDelegate

@@ -72,6 +72,12 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
         return t.diagHeartbeatInterval;
       case 'lastNativeHeartbeatTs':
         return t.diagLastNativeHeartbeat;
+      case 'bgTaskRegistered':
+        return t.diagBgTaskRegistered;
+      case 'bgTaskPendingInMin':
+        return t.diagBgTaskPending;
+      case 'bgTaskSubmitError':
+        return t.diagBgTaskSubmitError;
       default:
         return key;
     }
@@ -85,7 +91,12 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       'locationServicesEnabled': {'false'},
       'notificationsAuthorized': {'false'},
       'accuracyAuthorization': {'reducedAccuracy'},
+      // No handler and no queued request both mean: the heartbeat can never
+      // fire, no matter how long you wait.
+      'bgTaskRegistered': {'false'},
+      'bgTaskPendingInMin': {'-1'},
     };
+    if (key == 'bgTaskSubmitError' && value != 'none') return Colors.red;
     if (bad[key]?.contains(value) ?? false) return Colors.red;
     return null;
   }

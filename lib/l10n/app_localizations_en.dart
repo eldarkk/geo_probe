@@ -382,4 +382,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagLastNativeHeartbeat => 'Last background heartbeat';
+
+  @override
+  String get diagBgTaskRegistered => 'Background task registered';
+
+  @override
+  String get diagBgTaskPending => 'Next background task';
+
+  @override
+  String get diagBgTaskSubmitError => 'Scheduling error';
+
+  @override
+  String get bgTaskNotQueued => 'not queued';
+
+  @override
+  String get bgTaskDueNow => 'due, waiting for iOS';
+
+  @override
+  String bgTaskPendingIn(int min) {
+    return 'in $min min';
+  }
 }

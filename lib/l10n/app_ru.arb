@@ -118,5 +118,11 @@
   "diagBatteryPercent": "Батарея, %",
   "diagHeartbeatEnabled": "Фоновый heartbeat",
   "diagHeartbeatInterval": "Интервал heartbeat",
-  "diagLastNativeHeartbeat": "Последний фоновый heartbeat"
+  "diagLastNativeHeartbeat": "Последний фоновый heartbeat",
+  "diagBgTaskRegistered": "Фоновая задача зарегистрирована",
+  "diagBgTaskPending": "Следующая фоновая задача",
+  "diagBgTaskSubmitError": "Ошибка планирования",
+  "bgTaskNotQueued": "не запланирована",
+  "bgTaskDueNow": "пора, ждём iOS",
+  "bgTaskPendingIn": "через {min} мин"
 }

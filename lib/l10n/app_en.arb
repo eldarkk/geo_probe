@@ -189,5 +189,18 @@
   "diagBatteryPercent": "Battery, %",
   "diagHeartbeatEnabled": "Background heartbeat",
   "diagHeartbeatInterval": "Heartbeat interval",
-  "diagLastNativeHeartbeat": "Last background heartbeat"
+  "diagLastNativeHeartbeat": "Last background heartbeat",
+  "diagBgTaskRegistered": "Background task registered",
+  "diagBgTaskPending": "Next background task",
+  "diagBgTaskSubmitError": "Scheduling error",
+  "bgTaskNotQueued": "not queued",
+  "bgTaskDueNow": "due, waiting for iOS",
+  "bgTaskPendingIn": "in {min} min",
+  "@bgTaskPendingIn": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  }
 }

@@ -384,4 +384,24 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get diagLastNativeHeartbeat => 'Последний фоновый heartbeat';
+
+  @override
+  String get diagBgTaskRegistered => 'Фоновая задача зарегистрирована';
+
+  @override
+  String get diagBgTaskPending => 'Следующая фоновая задача';
+
+  @override
+  String get diagBgTaskSubmitError => 'Ошибка планирования';
+
+  @override
+  String get bgTaskNotQueued => 'не запланирована';
+
+  @override
+  String get bgTaskDueNow => 'пора, ждём iOS';
+
+  @override
+  String bgTaskPendingIn(int min) {
+    return 'через $min мин';
+  }
 }

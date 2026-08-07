@@ -78,6 +78,17 @@ String diagValueLabel(AppLocalizations t, String key, Object? value) {
             .format(DateTime.fromMillisecondsSinceEpoch(value.toInt()));
       }
       return '—';
+    case 'bgTaskPendingInMin':
+      // -1 = nothing queued at all, 0 = due but iOS has not run it yet.
+      if (value is num) {
+        final min = value.toInt();
+        if (min < 0) return t.bgTaskNotQueued;
+        if (min == 0) return t.bgTaskDueNow;
+        return t.bgTaskPendingIn(min);
+      }
+      return '$value';
+    case 'bgTaskSubmitError':
+      return '$value' == 'none' ? '—' : '$value';
     case 'backgroundRefreshStatus':
       switch ('$value') {
         case 'available':
